@@ -112,11 +112,30 @@ const UIModule = (function () {
   }
 
   /* --------------------------------------------------------------------------
-     Simple Clean Login Auth Handler
+     Sign In & Register Auth Handlers
      -------------------------------------------------------------------------- */
   function bindAuthEvents() {
+    const tabSignin = document.getElementById('tab-auth-signin');
+    const tabSignup = document.getElementById('tab-auth-signup');
     const formSignin = document.getElementById('form-auth-signin');
+    const formSignup = document.getElementById('form-auth-signup');
+
+    tabSignin?.addEventListener('click', () => {
+      tabSignin.classList.add('active');
+      tabSignup?.classList.remove('active');
+      formSignin?.classList.remove('hide');
+      formSignup?.classList.add('hide');
+    });
+
+    tabSignup?.addEventListener('click', () => {
+      tabSignup.classList.add('active');
+      tabSignin?.classList.remove('active');
+      formSignup?.classList.remove('hide');
+      formSignin?.classList.add('hide');
+    });
+
     formSignin?.addEventListener('submit', handleSignInSubmit);
+    formSignup?.addEventListener('submit', handleSignUpSubmit);
 
     // Sign Out Button
     document.getElementById('btn-auth-logout')?.addEventListener('click', () => {
@@ -147,6 +166,38 @@ const UIModule = (function () {
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Login';
+    }
+  }
+
+  async function handleSignUpSubmit(e) {
+    e.preventDefault();
+    const username = document.getElementById('signup-username').value.trim();
+    const password = document.getElementById('signup-password').value;
+    const confirm = document.getElementById('signup-confirm').value;
+
+    if (!username || !password || !confirm) {
+      showToast('Validation Error', 'Please fill in all registration fields.', 'error');
+      return;
+    }
+
+    if (password !== confirm) {
+      showToast('Validation Error', 'Passwords do not match. Please re-enter.', 'error');
+      return;
+    }
+
+    const submitBtn = document.getElementById('btn-submit-signup');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating Account...';
+
+    try {
+      const user = await window.AuthService.signUp(username, password);
+      showToast('Registration Successful', `Account created! Welcome, ${user.username}!`, 'success');
+      renderAuthState();
+    } catch (err) {
+      showToast('Registration Failed', err.message, 'error');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Register & Login';
     }
   }
 

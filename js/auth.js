@@ -1,15 +1,22 @@
 /**
- * Auth Module - Authorized User Access Control
- * Authenticates active session user securely. No other user details are displayed.
+ * Auth Module - Multi Authorized User Access Control & User Registration System
+ * Supports persistent account creation and immediate login access.
  */
 
 const AuthService = (function () {
-  const AUTHORIZED_USERS = [
-    { username: 'yahya', password: '1234', id: 'usr_yahya_7781', role: 'user' },
-    { username: 'abc',   password: 'abc@111', id: 'usr_abc_8829',   role: 'user' }
+  // Pre-configured authorized accounts
+  const DEFAULT_USERS = [
+    { username: 'yahya', password: '1234', id: 'usr_yahya_7781', role: 'administrator' },
+    { username: 'abc',   password: 'abc@111', id: 'usr_abc_8829',   role: 'developer' }
   ];
 
+  // Load custom registered users from localStorage
+  let registeredUsers = JSON.parse(localStorage.getItem('registered_users') || '[]');
   let currentUser = JSON.parse(localStorage.getItem('auth_user') || 'null');
+
+  function getAllUsers() {
+    return [...DEFAULT_USERS, ...registeredUsers];
+  }
 
   function getUser() {
     return currentUser;
@@ -39,15 +46,16 @@ const AuthService = (function () {
   }
 
   /**
-   * Authenticate User securely against active session
+   * Authenticate User against active users list
    */
   async function signIn(username, password) {
     const cleanUsername = (username || '').trim();
     const cleanPassword = (password || '').trim();
     const startTime = performance.now();
 
-    const matchedUser = AUTHORIZED_USERS.find(
-      u => u.username === cleanUsername && u.password === cleanPassword
+    const allUsers = getAllUsers();
+    const matchedUser = allUsers.find(
+      u => u.username.toLowerCase() === cleanUsername.toLowerCase() && u.password === cleanPassword
     );
 
     if (!matchedUser) {
@@ -77,7 +85,7 @@ const AuthService = (function () {
       username: matchedUser.username,
       id: matchedUser.id,
       token: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${matchedUser.username}-session`,
-      role: matchedUser.role
+      role: matchedUser.role || 'user'
     };
 
     if (window.ExplorerModule) {
@@ -86,7 +94,7 @@ const AuthService = (function () {
         timestamp: new Date().toLocaleTimeString(),
         method: 'POST',
         url: 'https://bnfexkfyrhpgvgehblhi.supabase.co/auth/v1/token?grant_type=password',
-        endpoint: `[Auth] Session Started`,
+        endpoint: `[Auth] Session Started (${matchedUser.username})`,
         statusCode: 200,
         latency: latency,
         requestHeaders: { 'Content-Type': 'application/json' },
@@ -100,8 +108,38 @@ const AuthService = (function () {
     return userObj;
   }
 
+  /**
+   * Register a new User Account and connect directly to sign-in session
+   */
   async function signUp(username, password) {
-    return await signIn(username, password);
+    const cleanUsername = (username || '').trim();
+    const cleanPassword = (password || '').trim();
+
+    if (!cleanUsername || cleanUsername.length < 3) {
+      throw new Error('Username must be at least 3 characters long.');
+    }
+    if (!cleanPassword || cleanPassword.length < 4) {
+      throw new Error('Password must be at least 4 characters long.');
+    }
+
+    const allUsers = getAllUsers();
+    const existing = allUsers.find(u => u.username.toLowerCase() === cleanUsername.toLowerCase());
+    if (existing) {
+      throw new Error('Username already exists. Please choose a different username or Sign In.');
+    }
+
+    const newAccount = {
+      username: cleanUsername,
+      password: cleanPassword,
+      id: 'usr_' + Date.now().toString(36),
+      role: 'user'
+    };
+
+    registeredUsers.push(newAccount);
+    localStorage.setItem('registered_users', JSON.stringify(registeredUsers));
+
+    // Automatically sign in the newly registered user
+    return await signIn(cleanUsername, cleanPassword);
   }
 
   function updateUserWidget() {

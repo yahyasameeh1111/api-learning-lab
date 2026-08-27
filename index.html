@@ -340,18 +340,24 @@
       </section>
 
 
-      <!-- ==================== CLEAN & SIMPLE LOGIN VIEW ==================== -->
+      <!-- ==================== SIGN IN & REGISTER VIEW ==================== -->
       <section id="view-login" class="tab-view">
         <div class="auth-card-wrapper">
-          <!-- Unauthenticated State Card -->
+          <!-- Unauthenticated Card -->
           <div class="auth-card glass" id="auth-unauth-container">
-            <div class="auth-header">
-              <h3>Sign In</h3>
-              <p class="subtitle">Please enter your username and password</p>
+            <!-- Auth Tab Switcher -->
+            <div class="auth-tab-group" style="margin-bottom: 1rem;">
+              <button class="auth-tab active" id="tab-auth-signin">Sign In</button>
+              <button class="auth-tab" id="tab-auth-signup">Register Account</button>
             </div>
 
-            <!-- Simple Sign In Form -->
+            <!-- Sign In Form -->
             <form id="form-auth-signin" class="modal-form" novalidate>
+              <div class="auth-header">
+                <h3>Sign In</h3>
+                <p class="subtitle">Please enter your credentials to login</p>
+              </div>
+
               <div class="form-group">
                 <label for="login-username">Username</label>
                 <input type="text" id="login-username" required placeholder="Enter username" autocomplete="username">
@@ -365,6 +371,35 @@
               <div class="modal-footer flex-column" style="margin-top: 0.5rem;">
                 <button type="submit" class="btn btn-primary post btn-block" id="btn-submit-signin">
                   Login
+                </button>
+              </div>
+            </form>
+
+            <!-- Register Form (Connected to instant login) -->
+            <form id="form-auth-signup" class="modal-form hide" novalidate>
+              <div class="auth-header">
+                <h3>Register New Account</h3>
+                <p class="subtitle">Create an account to unlock instant website access</p>
+              </div>
+
+              <div class="form-group">
+                <label for="signup-username">Choose Username *</label>
+                <input type="text" id="signup-username" required placeholder="Min 3 characters" autocomplete="username">
+              </div>
+
+              <div class="form-group">
+                <label for="signup-password">Choose Password *</label>
+                <input type="password" id="signup-password" required placeholder="Min 4 characters" autocomplete="new-password">
+              </div>
+
+              <div class="form-group">
+                <label for="signup-confirm">Confirm Password *</label>
+                <input type="password" id="signup-confirm" required placeholder="Re-enter password" autocomplete="new-password">
+              </div>
+
+              <div class="modal-footer flex-column" style="margin-top: 0.5rem;">
+                <button type="submit" class="btn btn-primary post btn-block" id="btn-submit-signup">
+                  Register & Login
                 </button>
               </div>
             </form>
