@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>API Learning Lab – DummyJSON CRUD</title>
+  <title>API Learning Lab – REST API & Supabase Database Playground</title>
   <link rel="stylesheet" href="css/styles.css">
   <!-- Google Fonts: Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -30,7 +30,26 @@
         </div>
         <div class="brand-text">
           <h1>API Learning Lab</h1>
-          <span class="badge badge-api">DummyJSON REST API</span>
+          <div class="provider-pill-group">
+            <button class="provider-pill supabase-pill active" data-provider="supabase" id="provider-supabase-btn">
+              ⚡ Supabase DB
+            </button>
+            <button class="provider-pill" data-provider="localdb" id="provider-localdb-btn">
+              💾 Local DB
+            </button>
+            <button class="provider-pill" data-provider="dummyjson" id="provider-dummyjson-btn">
+              DummyJSON
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Prominent Clean Global Search Bar in Header -->
+      <div class="header-search-container">
+        <div class="search-box glass-search">
+          <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="global-search" placeholder="Search products by title..." autocomplete="off">
+          <button class="clear-search-btn hide" id="clear-search">&times;</button>
         </div>
       </div>
 
@@ -44,6 +63,10 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
           CRUD Demo
         </button>
+        <button class="nav-btn" data-tab="login">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          Login / Auth
+        </button>
         <button class="nav-btn" data-tab="explorer">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
           API Explorer
@@ -51,18 +74,19 @@
         </button>
         <button class="nav-btn" data-tab="docs">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-          HTTP Status Guide
+          Docs & SQL
         </button>
       </nav>
 
       <!-- Global Controls -->
       <div class="header-controls">
-        <!-- Live Global Search -->
-        <div class="search-box">
-          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="global-search" placeholder="Search products (GET)..." autocomplete="off">
-          <button class="clear-search-btn hide" id="clear-search">&times;</button>
-        </div>
+        <!-- Header User Widget -->
+        <div id="header-user-widget"></div>
+
+        <!-- Supabase Settings Trigger Button -->
+        <button class="btn btn-sm btn-outline supabase-settings-btn" id="open-supabase-settings-btn" title="Configure Supabase Database Credentials">
+          ⚡ Supabase Config
+        </button>
 
         <!-- Learning Mode Toggle -->
         <label class="toggle-switch-wrapper" title="Toggle interactive API explanation mode">
@@ -90,8 +114,9 @@
     <div class="mobile-nav glass" id="mobile-nav">
       <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
       <button class="nav-btn" data-tab="crud">CRUD Demo</button>
+      <button class="nav-btn" data-tab="login">Login / Auth</button>
       <button class="nav-btn" data-tab="explorer">API Explorer</button>
-      <button class="nav-btn" data-tab="docs">HTTP Status Guide</button>
+      <button class="nav-btn" data-tab="docs">Docs & SQL</button>
     </div>
   </header>
 
@@ -104,27 +129,25 @@
         <!-- Hero Card -->
         <div class="hero-card glass card-hover-effect">
           <div class="hero-content">
-            <div class="hero-tag"><span class="pulse-dot"></span> Interactive REST API Playground</div>
-            <h2>Understand How APIs Work By Doing</h2>
+            <div class="hero-tag"><span class="pulse-dot"></span> Interactive REST API & Supabase Database Engine</div>
+            <h2>Master REST APIs & Live Supabase PostgreSQL</h2>
             <p>
-              Welcome to <strong>API Learning Lab</strong>! Experience real-time HTTP requests (GET, POST, PUT, DELETE) using the public <code>https://dummyjson.com</code> API. See live network headers, payloads, status codes, and code samples with every click.
+              Welcome to <strong>API Learning Lab</strong>! Connected to your live <strong>Supabase PostgreSQL Database</strong> via PostgREST API. Observe live network headers, payloads, status codes, and SQL queries with every click.
             </p>
             <div class="hero-actions">
               <button class="btn btn-primary" id="start-crud-btn">
                 Launch CRUD Playground
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
               </button>
-              <button class="btn btn-secondary" id="open-flow-btn">
-                Watch Request Flow
-              </button>
             </div>
           </div>
           <div class="hero-visual">
             <div class="method-badge-stack">
-              <span class="method-chip get">GET /products</span>
-              <span class="method-chip post">POST /products/add</span>
-              <span class="method-chip put">PUT /products/1</span>
-              <span class="method-chip delete">DELETE /products/1</span>
+              <span class="method-chip get">GET /rest/v1/products</span>
+              <span class="method-chip post">POST /rest/v1/products</span>
+              <span class="method-chip put">PATCH /rest/v1/products</span>
+              <span class="method-chip delete">DELETE /rest/v1/products</span>
+              <span class="method-chip supa-chip">⚡ Supabase PostgREST</span>
             </div>
           </div>
         </div>
@@ -143,27 +166,21 @@
 
           <div class="edu-card glass">
             <div class="edu-icon green">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
             </div>
-            <h3>What is CRUD?</h3>
+            <h3>Supabase PostgreSQL</h3>
             <p>
-              CRUD represents the 4 core database operations mapped to HTTP methods:
+              Connected to <code>https://bnfexkfyrhpgvgehblhi.supabase.co</code>. All CRUD operations map directly to PostgREST endpoints and Row Level Security policies.
             </p>
-            <ul class="crud-list">
-              <li><span class="method-chip get">GET</span> <strong>Read</strong> (Retrieve data)</li>
-              <li><span class="method-chip post">POST</span> <strong>Create</strong> (New resource)</li>
-              <li><span class="method-chip put">PUT</span> <strong>Update</strong> (Modify resource)</li>
-              <li><span class="method-chip delete">DELETE</span> <strong>Delete</strong> (Remove resource)</li>
-            </ul>
           </div>
 
           <div class="edu-card glass">
             <div class="edu-icon purple">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
             </div>
-            <h3>HTTP Request Lifecycle</h3>
+            <h3>REST to SQL Mapping</h3>
             <p>
-              When your application calls <code>fetch()</code>, a request travels over HTTPS with headers and optional body data. The server processes it, checks auth & logic, then returns a status code (e.g. 200 OK) with response data.
+              See how <code>GET</code> translates to <code>SELECT</code>, <code>POST</code> to <code>INSERT</code>, <code>PATCH</code> to <code>UPDATE</code>, and <code>DELETE</code> to <code>DELETE FROM</code> table statements.
             </p>
           </div>
         </div>
@@ -172,7 +189,7 @@
         <div class="flow-section glass" id="flow-container">
           <div class="section-header">
             <div>
-              <h3>Visual HTTP Request Flow</h3>
+              <h3>Visual HTTP & Database Request Flow</h3>
               <p class="subtitle">Click any button below to trigger an animated request journey through the architecture</p>
             </div>
             <div class="flow-triggers">
@@ -204,15 +221,15 @@
             <div class="flow-node" id="node-network">
               <div class="node-icon">🌐</div>
               <div class="node-title">3. Internet / API</div>
-              <div class="node-sub">HTTP Headers & Body</div>
+              <div class="node-sub">Headers (`apikey`, Bearer)</div>
             </div>
 
             <div class="flow-path"><div class="pulse-beam" id="beam-3"></div></div>
 
             <div class="flow-node" id="node-server">
               <div class="node-icon">⚡</div>
-              <div class="node-title">4. DummyJSON Server</div>
-              <div class="node-sub">Process & Status Code</div>
+              <div class="node-title">4. Supabase DB</div>
+              <div class="node-sub">PostgreSQL / RLS</div>
             </div>
 
             <div class="flow-path"><div class="pulse-beam" id="beam-4"></div></div>
@@ -231,7 +248,7 @@
               <span class="console-method" id="flow-method-label">READY</span>
             </div>
             <div class="console-body" id="flow-status-text">
-              Select a method above or perform a CRUD action to visualize the HTTP lifecycle.
+              Select a method above or perform a CRUD action to visualize the HTTP & Database lifecycle.
             </div>
           </div>
         </div>
@@ -240,9 +257,21 @@
 
       <!-- ==================== CRUD DEMO VIEW ==================== -->
       <section id="view-crud" class="tab-view">
+        <!-- Prominent Clean Product Search Bar in CRUD View -->
+        <div class="catalog-search-hero glass">
+          <div class="search-box catalog-search-box">
+            <svg class="search-icon-lg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="catalog-search-input" placeholder="🔍 Search products by name, title, or keyword..." autocomplete="off">
+            <button class="clear-search-btn hide" id="clear-catalog-search">&times;</button>
+          </div>
+        </div>
+
         <div class="crud-header-toolbar glass">
           <div class="toolbar-title">
-            <h2>Product Catalog (DummyJSON API)</h2>
+            <div style="display:flex; align-items:center; gap:0.6rem;">
+              <h2 id="catalog-provider-title">Product Catalog (Supabase Database)</h2>
+              <span class="badge method-chip supa-chip" id="provider-active-badge">⚡ Supabase Mode</span>
+            </div>
             <span class="count-badge" id="product-count">0 items loaded</span>
           </div>
 
@@ -276,7 +305,7 @@
         <div class="learning-banner glass hide" id="learning-banner-crud">
           <div class="banner-icon">💡</div>
           <div class="banner-content">
-            <strong>Learning Mode Active:</strong> Click <em>Add Product (POST)</em>, <em>Edit (PUT)</em>, or <em>Delete (DELETE)</em> to observe real HTTP calls, status codes, and request bodies logged in the API Explorer panel on your right.
+            <strong>Learning Mode Active:</strong> Click <em>Add Product (POST)</em>, <em>Edit (PUT)</em>, or <em>Delete (DELETE)</em> to observe real HTTP calls and PostgREST headers logged in the API Explorer panel on your right.
           </div>
           <button class="banner-close" id="dismiss-banner">&times;</button>
         </div>
@@ -296,8 +325,8 @@
         <div class="empty-state glass hide" id="empty-state">
           <div class="empty-icon">🔍</div>
           <h3>No Products Found</h3>
-          <p>We couldn't find any products matching your query or selected category.</p>
-          <button class="btn btn-secondary" id="empty-reset-btn">Reset Filters</button>
+          <p>We couldn't find any products matching your search term or category filter.</p>
+          <button class="btn btn-secondary" id="empty-reset-btn">Reset Search & Filters</button>
         </div>
 
         <!-- Load More / Pagination Toolbar -->
@@ -311,13 +340,107 @@
       </section>
 
 
-      <!-- ==================== HTTP STATUS GUIDE VIEW ==================== -->
+      <!-- ==================== CLEAN & SIMPLE LOGIN VIEW ==================== -->
+      <section id="view-login" class="tab-view">
+        <div class="auth-card-wrapper">
+          <!-- Unauthenticated State Card -->
+          <div class="auth-card glass" id="auth-unauth-container">
+            <div class="auth-header">
+              <h3>Sign In</h3>
+              <p class="subtitle">Please enter your username and password</p>
+            </div>
+
+            <!-- Simple Sign In Form -->
+            <form id="form-auth-signin" class="modal-form" novalidate>
+              <div class="form-group">
+                <label for="login-username">Username</label>
+                <input type="text" id="login-username" required placeholder="Enter username" autocomplete="username">
+              </div>
+
+              <div class="form-group">
+                <label for="login-password">Password</label>
+                <input type="password" id="login-password" required placeholder="Enter password" autocomplete="current-password">
+              </div>
+
+              <div class="modal-footer flex-column" style="margin-top: 0.5rem;">
+                <button type="submit" class="btn btn-primary post btn-block" id="btn-submit-signin">
+                  Login
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Authenticated State Card -->
+          <div class="auth-card glass hide" id="auth-authenticated-container">
+            <div class="profile-header-card">
+              <div class="profile-avatar-lg">👤</div>
+              <div class="profile-details">
+                <span class="badge method-chip post">SESSION ACTIVE</span>
+                <h2 id="profile-username-text">username</h2>
+                <span class="subtle-text">User ID: <code id="profile-id-text">usr_id</code></span>
+              </div>
+            </div>
+
+            <div class="jwt-preview-box">
+              <span class="code-label">Active Session Token:</span>
+              <pre class="js-code-box" id="profile-token-preview"></pre>
+            </div>
+
+            <div class="modal-footer">
+              <button class="btn btn-danger delete" id="btn-auth-logout">
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ==================== HTTP STATUS & SUPABASE SQL GUIDE VIEW ==================== -->
       <section id="view-docs" class="tab-view">
         <div class="docs-hero glass">
-          <h2>HTTP Status Code Reference Guide</h2>
+          <h2>HTTP Status Codes & Supabase SQL Guide</h2>
           <p>
-            HTTP status codes inform the client whether a specific HTTP request has been successfully completed. Learn the standard response classes with interactive live simulations.
+            Learn standard HTTP response classes alongside Supabase PostgreSQL database schemas and PostgREST API query parameters.
           </p>
+        </div>
+
+        <!-- Supabase SQL Schema Setup Box -->
+        <div class="sql-guide-card glass">
+          <div class="sql-card-header">
+            <div>
+              <h3>⚡ Supabase Database Setup & SQL Schema</h3>
+              <p class="subtitle">Copy and paste this script into your Supabase Dashboard &rarr; SQL Editor to create the <code>products</code> table and Row Level Security (RLS) policy.</p>
+            </div>
+            <button class="btn btn-sm btn-outline post" id="copy-sql-btn">
+              📋 Copy SQL Script
+            </button>
+          </div>
+
+          <pre class="sql-code-box" id="sql-code-snippet">-- 1. Create products table in PostgreSQL database
+create table if not exists public.products (
+  id bigint generated by default as identity primary key,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  title text not null,
+  price numeric not null,
+  category text not null,
+  description text,
+  rating numeric default 4.5,
+  thumbnail text default 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&q=80'
+);
+
+-- 2. Enable Row Level Security (RLS)
+alter table public.products enable row level security;
+
+-- 3. Create Public Access Policy for full CRUD API access
+create policy "Allow Public CRUD Access" on public.products
+  for all using (true) with check (true);
+
+-- 4. Seed initial products
+insert into public.products (title, price, category, description, rating, thumbnail) values
+  ('Wireless Noise-Canceling Headphones', 199.99, 'electronics', 'High-fidelity audio with active noise cancellation.', 4.8, 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&q=80'),
+  ('Ergonomic Wooden Desk Lamp', 49.50, 'home-decoration', 'Minimalist warm LED lamp for work setup.', 4.6, 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=400&q=80'),
+  ('Organic Hydrating Face Serum', 34.00, 'beauty', 'Nourishing facial botanical extract.', 4.7, 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=400&q=80');</pre>
         </div>
 
         <div class="status-grid">
@@ -386,7 +509,7 @@
             <h3>Permission Denied</h3>
             <p>The client identity is authenticated, but does not have permission rights to access the specified resource.</p>
             <div class="status-example">
-              <code>DELETE /admin/users/1 &rarr; 403</code>
+              <code>DELETE /resource/1 &rarr; 403</code>
             </div>
             <button class="btn btn-sm btn-outline delete" onclick="LearningModule.simulateStatus(403)">Simulate 403 Error</button>
           </div>
@@ -511,6 +634,43 @@
 
   <!-- ==================== MODALS ==================== -->
 
+  <!-- Supabase Configuration Modal -->
+  <div class="modal-backdrop hide" id="supabase-config-modal">
+    <div class="modal-card glass">
+      <div class="modal-header">
+        <div>
+          <h3>⚡ Configure Supabase Database</h3>
+          <p class="subtitle">Connect to your live Supabase project PostgreSQL database via PostgREST API</p>
+        </div>
+        <button class="modal-close" data-close="supabase-config-modal">&times;</button>
+      </div>
+
+      <form id="supabase-config-form" class="modal-form" novalidate>
+        <div class="form-group">
+          <label for="supa-url">Supabase Project URL *</label>
+          <input type="url" id="supa-url" placeholder="https://bnfexkfyrhpgvgehblhi.supabase.co">
+          <span class="subtle-text">Found in Supabase Dashboard &rarr; Project Settings &rarr; API &rarr; Project URL</span>
+        </div>
+
+        <div class="form-group">
+          <label for="supa-key">Supabase Anon / Publishable API Key *</label>
+          <input type="password" id="supa-key" placeholder="sb_publishable_v2JCkKSoNJmJJKEz1NgzLg_ltJuiqRK">
+          <span class="subtle-text">Found in Supabase Dashboard &rarr; Project Settings &rarr; API keys</span>
+        </div>
+
+        <div class="status-connection-box" id="supa-test-status-box">
+          <span class="status-icon">ℹ️</span>
+          <span id="supa-status-message">Connected to live Supabase PostgreSQL storage (https://bnfexkfyrhpgvgehblhi.supabase.co).</span>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="test-supa-btn">Test Connection</button>
+          <button type="submit" class="btn btn-primary post" id="save-supa-btn">Save Credentials</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Product Details Modal -->
   <div class="modal-backdrop hide" id="product-details-modal">
     <div class="modal-card glass">
@@ -527,7 +687,7 @@
       <div class="modal-header">
         <div>
           <h3><span class="method-chip post">POST</span> Add New Product</h3>
-          <p class="subtitle">Simulate sending a POST request to <code>/products/add</code></p>
+          <p class="subtitle">Simulate sending a POST request</p>
         </div>
         <button class="modal-close" data-close="create-product-modal">&times;</button>
       </div>
@@ -550,7 +710,6 @@
             <label for="create-category">Category *</label>
             <select id="create-category" required>
               <option value="">Select Category</option>
-              <!-- Populated by JS -->
             </select>
             <span class="error-text hide" id="err-create-category">Category is required</span>
           </div>
@@ -583,7 +742,7 @@
       <div class="modal-header">
         <div>
           <h3><span class="method-chip put">PUT</span> Edit Product #<span id="edit-product-id-label"></span></h3>
-          <p class="subtitle">Simulate sending a PUT request to <code>/products/{id}</code></p>
+          <p class="subtitle">Simulate sending an update request</p>
         </div>
         <button class="modal-close" data-close="edit-product-modal">&times;</button>
       </div>
@@ -619,7 +778,7 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-close="edit-product-modal">Cancel</button>
           <button type="submit" class="btn btn-primary put" id="submit-edit-btn">
-            Send PUT Request
+            Send Update Request
           </button>
         </div>
       </form>
@@ -640,7 +799,7 @@
         <div class="alert-icon-delete">🗑️</div>
         <h4>Are you sure you want to delete this product?</h4>
         <p class="delete-target-title" id="delete-target-title">Product Name</p>
-        <p class="delete-target-sub">This will send a <code>DELETE /products/<span id="delete-target-id"></span></code> request to the DummyJSON server.</p>
+        <p class="delete-target-sub">This will send a <code>DELETE</code> request to the server.</p>
       </div>
 
       <div class="modal-footer flex-center">
@@ -679,7 +838,11 @@
 
 
   <!-- JavaScript Modules -->
+  <script src="js/config.js"></script>
+  <script src="js/db.js"></script>
   <script src="js/api.js"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/auth.js"></script>
   <script src="js/explorer.js"></script>
   <script src="js/learning.js"></script>
   <script src="js/ui.js"></script>

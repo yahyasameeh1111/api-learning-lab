@@ -1,20 +1,16 @@
 /**
- * API Module - Handles communication with DummyJSON REST API (https://dummyjson.com)
- * Intercepts all outgoing requests and logs telemetry to the API Explorer Network Inspector.
+ * API Module - Unified DataService Routing Layer
+ * Supabase is configured as the primary default backend provider.
  */
 
 const ApiService = (function () {
   const BASE_URL = 'https://dummyjson.com';
 
-  /**
-   * Helper wrapper around native fetch() that tracks latency, status, headers, and logs to API Explorer
-   */
   async function request(endpoint, options = {}) {
     const url = `${BASE_URL}${endpoint}`;
     const method = (options.method || 'GET').toUpperCase();
     const startTime = performance.now();
 
-    // Prepare default request headers
     const reqHeaders = {
       'Content-Type': 'application/json',
       ...(options.headers || {})
@@ -43,13 +39,7 @@ const ApiService = (function () {
       });
 
       statusCode = response.status;
-
-      // Extract response headers
-      response.headers.forEach((value, key) => {
-        resHeaders[key] = value;
-      });
-
-      // Parse JSON response body
+      response.headers.forEach((value, key) => { resHeaders[key] = value; });
       resData = await response.json();
     } catch (err) {
       errorMsg = err.message;
@@ -60,13 +50,12 @@ const ApiService = (function () {
     const endTime = performance.now();
     const latency = Math.round(endTime - startTime);
 
-    // Build standardized request log object
     const logData = {
       id: 'req_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
       timestamp: new Date().toLocaleTimeString(),
       method: method,
       url: url,
-      endpoint: endpoint,
+      endpoint: `[DummyJSON] ${endpoint}`,
       statusCode: statusCode,
       latency: latency,
       requestHeaders: reqHeaders,
@@ -76,107 +65,88 @@ const ApiService = (function () {
       error: errorMsg
     };
 
-    // Log automatically to API Explorer
-    if (window.ExplorerModule) {
-      window.ExplorerModule.addLog(logData);
-    }
-
-    // Trigger Visual Request Flow diagram animation in Dashboard if Learning module available
+    if (window.ExplorerModule) window.ExplorerModule.addLog(logData);
     if (window.LearningModule && window.LearningModule.isLearningModeActive()) {
       window.LearningModule.animateFlow(method, statusCode, logData);
     }
 
-    if (errorMsg) {
-      throw new Error(errorMsg);
-    }
-
+    if (errorMsg) throw new Error(errorMsg);
     return resData;
   }
 
-  // =========================================================================
-  // PUBLIC API ENDPOINTS
-  // =========================================================================
+  return {
+    loadProducts: (limit, skip) => request(`/products?limit=${limit}&skip=${skip}`),
+    fetchCategories: () => request('/products/categories'),
+    fetchProductsByCategory: (category, limit, skip) => request(`/products/category/${encodeURIComponent(category)}?limit=${limit}&skip=${skip}`),
+    searchProducts: (query) => request(`/products/search?q=${encodeURIComponent(query)}`),
+    fetchProductById: (id) => request(`/products/${id}`),
+    addProduct: (data) => request('/products/add', { method: 'POST', body: JSON.stringify(data) }),
+    updateProduct: (id, data) => request(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    deleteProduct: (id) => request(`/products/${id}`, { method: 'DELETE' })
+  };
+})();
 
-  /**
-   * READ (GET): Fetch products with limit and skip pagination
-   * Endpoint: GET /products?limit={limit}&skip={skip}
-   */
-  async function loadProducts(limit = 10, skip = 0) {
-    return await request(`/products?limit=${limit}&skip=${skip}`);
+/**
+ * Unified DataService Router - Uses Supabase as primary backend by default.
+ * Handles automatic fallback to LocalDB if Supabase table is not yet seeded.
+ */
+const DataService = (function () {
+  let activeProvider = localStorage.getItem('api_provider') || 'supabase';
+
+  function getProvider() {
+    return activeProvider;
   }
 
-  /**
-   * READ (GET): Fetch categories list
-   * Endpoint: GET /products/categories
-   */
-  async function fetchCategories() {
-    return await request('/products/categories');
+  function setProvider(provider) {
+    activeProvider = provider;
+    localStorage.setItem('api_provider', provider);
+    console.log(` Switched Data Provider to: ${provider}`);
   }
 
-  /**
-   * READ (GET): Fetch products by category
-   * Endpoint: GET /products/category/{category}?limit={limit}&skip={skip}
-   */
-  async function fetchProductsByCategory(category, limit = 10, skip = 0) {
-    return await request(`/products/category/${encodeURIComponent(category)}?limit=${limit}&skip=${skip}`);
+  function getActiveService() {
+    if (activeProvider === 'localdb' && window.LocalDBService) {
+      return window.LocalDBService;
+    }
+    if (activeProvider === 'dummyjson') {
+      return ApiService;
+    }
+    // Default to Supabase
+    return window.SupabaseService || window.LocalDBService || ApiService;
   }
 
-  /**
-   * SEARCH (GET): Search products by query string
-   * Endpoint: GET /products/search?q={query}
-   */
-  async function searchProducts(query) {
-    return await request(`/products/search?q=${encodeURIComponent(query)}`);
-  }
-
-  /**
-   * READ (GET): Fetch single product details by ID
-   * Endpoint: GET /products/{id}
-   */
-  async function fetchProductById(id) {
-    return await request(`/products/${id}`);
-  }
-
-  /**
-   * CREATE (POST): Add a new product
-   * Endpoint: POST /products/add
-   */
-  async function addProduct(productData) {
-    return await request('/products/add', {
-      method: 'POST',
-      body: JSON.stringify(productData)
-    });
-  }
-
-  /**
-   * UPDATE (PUT): Edit an existing product
-   * Endpoint: PUT /products/{id}
-   */
-  async function updateProduct(id, productData) {
-    return await request(`/products/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(productData)
-    });
-  }
-
-  /**
-   * DELETE (DELETE): Remove a product by ID
-   * Endpoint: DELETE /products/{id}
-   */
-  async function deleteProduct(id) {
-    return await request(`/products/${id}`, {
-      method: 'DELETE'
-    });
+  async function safeExecute(fnName, args) {
+    try {
+      return await getActiveService()[fnName](...args);
+    } catch (err) {
+      // If active provider is Supabase and table does not exist yet (relation "public.products" does not exist)
+      if (activeProvider === 'supabase' && window.LocalDBService) {
+        console.warn(`Supabase query failed (${err.message}). Falling back to LocalDB engine...`);
+        if (window.UIModule) {
+          window.UIModule.showToast(
+            'Supabase Database Notice',
+            'Table "products" not found in Supabase. Please copy the SQL Schema script from Docs & SQL tab into your Supabase Dashboard SQL Editor.',
+            'info'
+          );
+        }
+        return await window.LocalDBService[fnName](...args);
+      }
+      throw err;
+    }
   }
 
   return {
-    loadProducts,
-    fetchCategories,
-    fetchProductsByCategory,
-    searchProducts,
-    fetchProductById,
-    addProduct,
-    updateProduct,
-    deleteProduct
+    getProvider,
+    setProvider,
+    loadProducts: (...args) => safeExecute('loadProducts', args),
+    fetchCategories: (...args) => safeExecute('fetchCategories', args),
+    fetchProductsByCategory: (...args) => safeExecute('fetchProductsByCategory', args),
+    searchProducts: (...args) => safeExecute('searchProducts', args),
+    fetchProductById: (...args) => safeExecute('fetchProductById', args),
+    addProduct: (...args) => safeExecute('addProduct', args),
+    updateProduct: (...args) => safeExecute('updateProduct', args),
+    deleteProduct: (...args) => safeExecute('deleteProduct', args)
   };
 })();
+
+window.ApiService = ApiService;
+window.DataService = DataService;

@@ -1,14 +1,14 @@
 /**
- * Main Application Bootstrap & Router - Links API, UI, Explorer, and Learning modules.
+ * Main Application Bootstrap & Router - Links API, LocalDB, Supabase, Auth, UI, Explorer, and Learning modules.
+ * Implements Authentication Guard: Only authenticated users can access app features.
  */
 
 const App = (function () {
   let searchDebounceTimer = null;
 
   function init() {
-    console.log('🚀 Initializing API Learning Lab application...');
+    console.log('🚀 Initializing API Learning Lab with Supabase & Auth Gate...');
 
-    // Initialize sub-modules
     UIModule.init();
     ExplorerModule.init();
     LearningModule.init();
@@ -16,15 +16,19 @@ const App = (function () {
     bindNavigation();
     bindGlobalSearch();
 
-    // Initial Data Fetch
-    loadInitialData();
+    // Authentication Guard Check
+    if (window.AuthService && !window.AuthService.isAuthenticated()) {
+      switchTab('login');
+      UIModule.showToast('Authentication Required', 'Please sign in to access the app.', 'info');
+    } else {
+      loadInitialData();
+    }
   }
 
   /* --------------------------------------------------------------------------
-     Tab Navigation Swapper
+     Tab Navigation Swapper with Auth Guard
      -------------------------------------------------------------------------- */
   function bindNavigation() {
-    // Top Nav buttons & Mobile Nav buttons
     document.querySelectorAll('.nav-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = btn.dataset.tab;
@@ -32,7 +36,6 @@ const App = (function () {
       });
     });
 
-    // Hero action buttons
     document.getElementById('start-crud-btn')?.addEventListener('click', () => {
       switchTab('crud');
     });
@@ -43,12 +46,10 @@ const App = (function () {
       flow?.scrollIntoView({ behavior: 'smooth' });
     });
 
-    // Mobile Hamburger Menu Toggle
     document.getElementById('mobile-menu-btn')?.addEventListener('click', () => {
       document.getElementById('mobile-nav')?.classList.toggle('open');
     });
 
-    // Escape Key closes modals
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         document.querySelectorAll('.modal-backdrop:not(.hide)').forEach(m => m.classList.add('hide'));
@@ -57,16 +58,20 @@ const App = (function () {
   }
 
   function switchTab(tabId) {
-    // Update active nav buttons
+    const authenticated = window.AuthService && window.AuthService.isAuthenticated();
+
+    // Protected Route Guard
+    if (!authenticated && tabId !== 'login') {
+      UIModule.showToast('Access Restricted', 'Please sign in first to access the dashboard and product catalog.', 'error');
+      tabId = 'login';
+    }
+
     document.querySelectorAll('.nav-btn').forEach(btn => {
       if (btn.dataset.tab === tabId) btn.classList.add('active');
       else btn.classList.remove('active');
     });
 
-    // Close mobile nav drawer if open
     document.getElementById('mobile-nav')?.classList.remove('open');
-
-    // Switch View Panels
     document.querySelectorAll('.tab-view').forEach(view => view.classList.remove('active'));
 
     const targetView = document.getElementById(`view-${tabId}`);
@@ -74,38 +79,53 @@ const App = (function () {
       targetView.classList.add('active');
     }
 
-    // Special case for API Explorer tab button: toggle Explorer panel on smaller screens
     if (tabId === 'explorer') {
       ExplorerModule.togglePanel();
+    }
+
+    // Load initial data if just authenticated and data not loaded
+    if (authenticated && tabId !== 'login') {
+      loadInitialData();
     }
   }
 
   /* --------------------------------------------------------------------------
-     Debounced Global Search Bar (300ms)
+     Debounced Synchronized Product Search Bars (Header & Catalog Hero)
      -------------------------------------------------------------------------- */
   function bindGlobalSearch() {
-    const searchInput = document.getElementById('global-search');
-    const clearBtn = document.getElementById('clear-search');
+    const headerInput = document.getElementById('global-search');
+    const catalogInput = document.getElementById('catalog-search-input');
+    const headerClearBtn = document.getElementById('clear-search');
+    const catalogClearBtn = document.getElementById('clear-catalog-search');
 
-    if (!searchInput) return;
+    function handleInputSync(val, sourceInput) {
+      if (sourceInput !== headerInput && headerInput) headerInput.value = val;
+      if (sourceInput !== catalogInput && catalogInput) catalogInput.value = val;
 
-    searchInput.addEventListener('input', (e) => {
-      const query = e.target.value.trim();
-
-      if (query.length > 0) {
-        clearBtn?.classList.remove('hide');
+      if (val.length > 0) {
+        headerClearBtn?.classList.remove('hide');
+        catalogClearBtn?.classList.remove('hide');
       } else {
-        clearBtn?.classList.add('hide');
+        headerClearBtn?.classList.add('hide');
+        catalogClearBtn?.classList.add('hide');
       }
 
       clearTimeout(searchDebounceTimer);
       searchDebounceTimer = setTimeout(() => {
-        handleSearchExecution(query);
+        handleSearchExecution(val);
       }, 300);
-    });
+    }
+
+    headerInput?.addEventListener('input', (e) => handleInputSync(e.target.value.trim(), headerInput));
+    catalogInput?.addEventListener('input', (e) => handleInputSync(e.target.value.trim(), catalogInput));
   }
 
   function handleSearchExecution(query) {
+    if (window.AuthService && !window.AuthService.isAuthenticated()) {
+      switchTab('login');
+      return;
+    }
+
     const statusBar = document.getElementById('search-status-bar');
     const termText = document.getElementById('search-term-text');
 
@@ -114,7 +134,6 @@ const App = (function () {
         termText.textContent = query;
         statusBar.classList.remove('hide');
       }
-      // Switch to CRUD tab if on dashboard
       switchTab('crud');
       loadCatalogData('all', query, 0);
     } else {
@@ -124,7 +143,7 @@ const App = (function () {
   }
 
   /* --------------------------------------------------------------------------
-     Catalog Data Loader (Handles GET /products, Search, Categories, & Pagination)
+     Catalog Data Loader (Delegates to DataService for Supabase, LocalDB, or DummyJSON)
      -------------------------------------------------------------------------- */
   async function loadCatalogData(category = 'all', query = '', skip = 0, isAppend = false) {
     if (!isAppend) {
@@ -134,11 +153,11 @@ const App = (function () {
     try {
       let res;
       if (query) {
-        res = await ApiService.searchProducts(query);
+        res = await window.DataService.searchProducts(query);
       } else if (category !== 'all') {
-        res = await ApiService.fetchProductsByCategory(category, 10, skip);
+        res = await window.DataService.fetchProductsByCategory(category, 10, skip);
       } else {
-        res = await ApiService.loadProducts(10, skip);
+        res = await window.DataService.loadProducts(10, skip);
       }
 
       const products = res.products || [];
@@ -147,7 +166,12 @@ const App = (function () {
       UIModule.setProducts(products, total, isAppend);
     } catch (err) {
       console.error('Failed to load products:', err);
-      UIModule.showToast('API Fetch Error', 'Unable to retrieve products from DummyJSON API.', 'error');
+      const provider = window.DataService.getProvider();
+      UIModule.showToast(
+        'Fetch Error',
+        provider === 'supabase' ? 'Could not reach Supabase. Check credentials.' : 'Unable to retrieve products.',
+        'error'
+      );
     }
   }
 
@@ -155,12 +179,10 @@ const App = (function () {
      Initial Data Load
      -------------------------------------------------------------------------- */
   async function loadInitialData() {
-    // 1. Load initial 10 products
     await loadCatalogData('all', '', 0);
 
-    // 2. Fetch categories for filter dropdown
     try {
-      const catRes = await ApiService.fetchCategories();
+      const catRes = await window.DataService.fetchCategories();
       UIModule.setCategories(catRes || []);
     } catch (err) {
       console.warn('Could not load categories:', err);
@@ -174,7 +196,6 @@ const App = (function () {
   };
 })();
 
-// Initialize application on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
   App.init();
 });

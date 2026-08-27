@@ -1,6 +1,6 @@
 /**
  * UI Module - Handles DOM Manipulation, Card Rendering, Skeleton Loaders,
- * Modals, Toasts, Form Validation, Search, and Theme Switcher.
+ * Modals, Toasts, Provider Switching, Auth Forms, and Search.
  */
 
 const UIModule = (function () {
@@ -27,10 +27,29 @@ const UIModule = (function () {
     emptyState = document.getElementById('empty-state');
 
     bindEvents();
+    bindAuthEvents();
     initTheme();
+    initProviderUI();
+    renderAuthState();
+    if (window.AuthService) window.AuthService.updateUserWidget();
   }
 
   function bindEvents() {
+    // Provider Switcher Pills
+    document.getElementById('provider-localdb-btn')?.addEventListener('click', () => switchProvider('localdb'));
+    document.getElementById('provider-supabase-btn')?.addEventListener('click', () => switchProvider('supabase'));
+    document.getElementById('provider-dummyjson-btn')?.addEventListener('click', () => switchProvider('dummyjson'));
+
+    // Open Supabase Settings Modal
+    document.getElementById('open-supabase-settings-btn')?.addEventListener('click', openSupabaseConfigModal);
+
+    // Supabase Config Form handlers
+    document.getElementById('supabase-config-form')?.addEventListener('submit', handleSupabaseConfigSave);
+    document.getElementById('test-supa-btn')?.addEventListener('click', handleSupabaseTestConnection);
+
+    // Copy SQL Script Button
+    document.getElementById('copy-sql-btn')?.addEventListener('click', copySqlScript);
+
     // Category dropdown filter
     categorySelect?.addEventListener('change', (e) => {
       activeCategory = e.target.value;
@@ -82,12 +101,198 @@ const UIModule = (function () {
 
     // Search reset buttons
     document.getElementById('clear-search')?.addEventListener('click', clearSearch);
+    document.getElementById('clear-catalog-search')?.addEventListener('click', clearSearch);
     document.getElementById('reset-search-btn')?.addEventListener('click', clearSearch);
     document.getElementById('empty-reset-btn')?.addEventListener('click', () => {
       clearSearch();
       categorySelect.value = 'all';
       activeCategory = 'all';
       resetAndFetch();
+    });
+  }
+
+  /* --------------------------------------------------------------------------
+     Simple Clean Login Auth Handler
+     -------------------------------------------------------------------------- */
+  function bindAuthEvents() {
+    const formSignin = document.getElementById('form-auth-signin');
+    formSignin?.addEventListener('submit', handleSignInSubmit);
+
+    // Sign Out Button
+    document.getElementById('btn-auth-logout')?.addEventListener('click', () => {
+      if (window.AuthService) window.AuthService.signOut();
+    });
+  }
+
+  async function handleSignInSubmit(e) {
+    e.preventDefault();
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+
+    if (!username || !password) {
+      showToast('Validation Error', 'Please enter both username and password.', 'error');
+      return;
+    }
+
+    const submitBtn = document.getElementById('btn-submit-signin');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Logging in...';
+
+    try {
+      const user = await window.AuthService.signIn(username, password);
+      showToast('Success', `Welcome back, ${user.username}!`, 'success');
+      renderAuthState();
+    } catch (err) {
+      showToast('Login Failed', err.message, 'error');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Login';
+    }
+  }
+
+  function renderAuthState() {
+    const unauthContainer = document.getElementById('auth-unauth-container');
+    const authContainer = document.getElementById('auth-authenticated-container');
+    if (!unauthContainer || !authContainer) return;
+
+    if (window.AuthService && window.AuthService.isAuthenticated()) {
+      const user = window.AuthService.getUser();
+      unauthContainer.classList.add('hide');
+      authContainer.classList.remove('hide');
+
+      const nameEl = document.getElementById('profile-username-text');
+      if (nameEl) nameEl.textContent = user.username;
+
+      const idEl = document.getElementById('profile-id-text');
+      if (idEl) idEl.textContent = user.id;
+
+      const tokenEl = document.getElementById('profile-token-preview');
+      if (tokenEl) tokenEl.textContent = user.token;
+    } else {
+      unauthContainer.classList.remove('hide');
+      authContainer.classList.add('hide');
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     Provider Switcher
+     -------------------------------------------------------------------------- */
+  function initProviderUI() {
+    const provider = window.DataService ? window.DataService.getProvider() : 'supabase';
+    updateProviderBadgeState(provider);
+  }
+
+  function switchProvider(provider) {
+    if (!window.DataService) return;
+    window.DataService.setProvider(provider);
+    updateProviderBadgeState(provider);
+
+    const labels = {
+      supabase: 'Switched to Supabase PostgREST API.',
+      localdb: 'Switched to Built-in Persistent Database.',
+      dummyjson: 'Switched to DummyJSON Mock API.'
+    };
+
+    showToast('Engine Changed', labels[provider] || 'Switched engine.', 'info');
+    resetAndFetch();
+  }
+
+  function updateProviderBadgeState(provider) {
+    const localBtn = document.getElementById('provider-localdb-btn');
+    const supaBtn = document.getElementById('provider-supabase-btn');
+    const dummyBtn = document.getElementById('provider-dummyjson-btn');
+    const catalogTitle = document.getElementById('catalog-provider-title');
+    const activeBadge = document.getElementById('provider-active-badge');
+
+    [localBtn, supaBtn, dummyBtn].forEach(b => b?.classList.remove('active'));
+
+    if (provider === 'supabase') {
+      supaBtn?.classList.add('active');
+      if (catalogTitle) catalogTitle.textContent = 'Product Catalog (Supabase Database)';
+      if (activeBadge) {
+        activeBadge.textContent = '⚡ Supabase Mode';
+        activeBadge.className = 'badge method-chip supa-chip';
+      }
+    } else if (provider === 'localdb') {
+      localBtn?.classList.add('active');
+      if (catalogTitle) catalogTitle.textContent = 'Product Catalog (Persistent Local DB)';
+      if (activeBadge) {
+        activeBadge.textContent = '💾 Local DB Mode';
+        activeBadge.className = 'badge method-chip supa-chip';
+      }
+    } else {
+      dummyBtn?.classList.add('active');
+      if (catalogTitle) catalogTitle.textContent = 'Product Catalog (DummyJSON API)';
+      if (activeBadge) {
+        activeBadge.textContent = 'DummyJSON Mode';
+        activeBadge.className = 'badge method-chip get';
+      }
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     Supabase Config Modal Handlers
+     -------------------------------------------------------------------------- */
+  function openSupabaseConfigModal() {
+    const supaService = window.SupabaseService;
+    if (supaService) {
+      const cfg = supaService.getConfig();
+      document.getElementById('supa-url').value = cfg.url;
+      document.getElementById('supa-key').value = cfg.key;
+    }
+    openModal('supabase-config-modal');
+  }
+
+  async function handleSupabaseTestConnection() {
+    const url = document.getElementById('supa-url').value.trim();
+    const key = document.getElementById('supa-key').value.trim();
+    const statusMsg = document.getElementById('supa-status-message');
+
+    if (!url || !key) {
+      showToast('Configuration Missing', 'Please provide both Supabase URL and API Key.', 'error');
+      return;
+    }
+
+    statusMsg.textContent = 'Testing HTTP connection to Supabase PostgREST endpoint...';
+
+    try {
+      await window.SupabaseService.testConnection(url, key);
+      statusMsg.innerHTML = '<strong style="color:var(--method-post);">✓ Success!</strong> Connection established with Supabase database.';
+      showToast('Connection Successful', 'Successfully authenticated with Supabase!', 'success');
+    } catch (err) {
+      statusMsg.innerHTML = `<strong style="color:var(--method-delete);">❌ Error:</strong> ${escapeHtml(err.message)}`;
+      showToast('Connection Failed', err.message, 'error');
+    }
+  }
+
+  function handleSupabaseConfigSave(e) {
+    e.preventDefault();
+    const url = document.getElementById('supa-url').value.trim();
+    const key = document.getElementById('supa-key').value.trim();
+
+    if (!url || !key) {
+      showToast('Configuration Missing', 'Please enter valid URL and API Key.', 'error');
+      return;
+    }
+
+    window.SupabaseService.saveConfig(url, key);
+    closeModal('supabase-config-modal');
+    switchProvider('supabase');
+    showToast('Credentials Saved', 'Supabase credentials saved. Reloading data...', 'success');
+  }
+
+  function copySqlScript() {
+    const code = document.getElementById('sql-code-snippet')?.textContent;
+    if (!code) return;
+
+    navigator.clipboard.writeText(code).then(() => {
+      const btn = document.getElementById('copy-sql-btn');
+      if (btn) {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '✓ Copied SQL!';
+        setTimeout(() => { btn.innerHTML = orig; }, 2000);
+      }
+      showToast('Copied!', 'Supabase PostgreSQL SQL script copied to clipboard.', 'success');
     });
   }
 
@@ -142,7 +347,6 @@ const UIModule = (function () {
 
     let displayList = [...products];
 
-    // Apply Sorting
     if (activeSort === 'price-asc') {
       displayList.sort((a, b) => a.price - b.price);
     } else if (activeSort === 'price-desc') {
@@ -205,8 +409,8 @@ const UIModule = (function () {
 
       <div class="card-actions">
         <button class="btn btn-sm btn-outline put edit-btn" data-id="${prod.id}">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-          Edit (PUT)
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          Edit
         </button>
         <button class="btn btn-sm btn-outline delete delete-btn" data-id="${prod.id}">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -215,19 +419,16 @@ const UIModule = (function () {
       </div>
     `;
 
-    // Card click opens details modal
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.card-actions')) return; // Ignore edit/delete clicks
+      if (e.target.closest('.card-actions')) return;
       showProductDetailsModal(prod);
     });
 
-    // Edit button click
     card.querySelector('.edit-btn')?.addEventListener('click', (e) => {
       e.stopPropagation();
       openEditModal(prod);
     });
 
-    // Delete button click
     card.querySelector('.delete-btn')?.addEventListener('click', (e) => {
       e.stopPropagation();
       openDeleteConfirmModal(prod);
@@ -243,7 +444,6 @@ const UIModule = (function () {
     categories = catList;
     if (!categorySelect) return;
 
-    // Keep "All Categories" option
     categorySelect.innerHTML = '<option value="all">All Categories</option>';
     const createCatSelect = document.getElementById('create-category');
     if (createCatSelect) createCatSelect.innerHTML = '<option value="">Select Category</option>';
@@ -274,6 +474,12 @@ const UIModule = (function () {
     if (!content) return;
 
     const imgUrl = prod.thumbnail || (prod.images && prod.images[0]) || 'https://via.placeholder.com/400x300';
+    const provider = window.DataService ? window.DataService.getProvider() : 'supabase';
+    const endpointLabel = provider === 'supabase'
+      ? `GET /rest/v1/products?id=eq.${prod.id}`
+      : provider === 'localdb'
+      ? `GET /localdb/products/${prod.id}`
+      : `GET /products/${prod.id}`;
 
     content.innerHTML = `
       <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
@@ -281,19 +487,18 @@ const UIModule = (function () {
           <img src="${imgUrl}" alt="${escapeHtml(prod.title)}" style="width:100%; border-radius:12px; object-fit:cover; max-height:260px;">
         </div>
         <div style="flex: 1.2; min-width: 220px; display:flex; flex-direction:column; gap:0.5rem;">
-          <span class="method-chip get">GET /products/${prod.id}</span>
+          <span class="method-chip get">${endpointLabel}</span>
           <span class="category-tag">${escapeHtml(prod.category || 'General')}</span>
           <h2>${escapeHtml(prod.title)}</h2>
           <h3 style="color:var(--text-main); font-size:1.6rem; font-weight:800;">$${Number(prod.price).toFixed(2)}</h3>
           <p style="color:var(--text-muted); font-size:0.9rem;">${escapeHtml(prod.description || 'No description available.')}</p>
           <div style="margin-top:0.5rem; font-size:0.85rem; color:var(--text-subtle);">
             <div>Rating: <strong>★ ${prod.rating || '4.5'} / 5.0</strong></div>
-            <div>Brand: <strong>${escapeHtml(prod.brand || 'Generic')}</strong></div>
-            <div>Stock Status: <strong>${prod.stock || 25} in stock</strong></div>
+            <div>Storage Engine: <strong>${provider.toUpperCase()}</strong></div>
           </div>
           <div style="margin-top:1rem;">
-            <button class="btn btn-sm btn-outline get" onclick="LearningModule.showFetchExplanation('GET', 'https://dummyjson.com/products/${prod.id}')">
-              💡 View JS fetch() Code
+            <button class="btn btn-sm btn-outline get" onclick="LearningModule.showFetchExplanation('GET', '${endpointLabel}')">
+              💡 View Code & SQL
             </button>
           </div>
         </div>
@@ -375,15 +580,13 @@ const UIModule = (function () {
     };
 
     try {
-      const res = await ApiService.addProduct(payload);
+      const res = await window.DataService.addProduct(payload);
 
-      // DummyJSON returns new item with assigned ID
       const newProduct = {
         ...payload,
-        id: res.id || Math.floor(Math.random() * 800) + 200
+        id: (res && res.id) ? res.id : Math.floor(Math.random() * 800) + 200
       };
 
-      // Prepend to UI product list
       products.unshift(newProduct);
       totalProducts++;
       renderProductGrid();
@@ -392,13 +595,19 @@ const UIModule = (function () {
       e.target.reset();
       updateCreatePayloadPreview();
 
-      showToast('POST Request Succeeded (201 Created)', `Created "${newProduct.title}" with ID #${newProduct.id}`, 'success');
+      const provider = window.DataService.getProvider();
+      showToast(
+        'POST Succeeded (201 Created)',
+        `Created "${newProduct.title}" in ${provider.toUpperCase()}`,
+        'success'
+      );
 
       if (window.LearningModule && window.LearningModule.isLearningModeActive()) {
-        window.LearningModule.showFetchExplanation('POST', 'https://dummyjson.com/products/add', payload);
+        const url = provider === 'supabase' ? '/rest/v1/products' : provider === 'localdb' ? '/localdb/products/add' : 'https://dummyjson.com/products/add';
+        window.LearningModule.showFetchExplanation('POST', url, payload);
       }
     } catch (err) {
-      showToast('POST Request Failed', err.message, 'error');
+      showToast('POST Failed', err.message, 'error');
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Send POST Request';
@@ -406,7 +615,7 @@ const UIModule = (function () {
   }
 
   /* --------------------------------------------------------------------------
-     UPDATE (PUT) Handler
+     UPDATE Handler
      -------------------------------------------------------------------------- */
   function openEditModal(prod) {
     document.getElementById('edit-id').value = prod.id;
@@ -433,14 +642,13 @@ const UIModule = (function () {
 
     const submitBtn = document.getElementById('submit-edit-btn');
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Sending PUT Request...';
+    submitBtn.textContent = 'Sending Update Request...';
 
     const payload = { title, price, description };
 
     try {
-      await ApiService.updateProduct(id, payload);
+      await window.DataService.updateProduct(id, payload);
 
-      // Update in local state
       const idx = products.findIndex(p => p.id == id);
       if (idx !== -1) {
         products[idx].title = title;
@@ -450,22 +658,23 @@ const UIModule = (function () {
 
       renderProductGrid();
 
-      // Highlight updated card
       const cardEl = document.querySelector(`.product-card[data-id="${id}"]`);
       cardEl?.classList.add('updated-highlight');
       setTimeout(() => cardEl?.classList.remove('updated-highlight'), 2000);
 
       closeModal('edit-product-modal');
-      showToast('PUT Request Succeeded (200 OK)', `Updated Product #${id} fields successfully.`, 'success');
+      showToast('Update Succeeded', `Updated Product #${id} fields successfully.`, 'success');
 
       if (window.LearningModule && window.LearningModule.isLearningModeActive()) {
-        window.LearningModule.showFetchExplanation('PUT', `https://dummyjson.com/products/${id}`, payload);
+        const provider = window.DataService.getProvider();
+        const url = provider === 'supabase' ? `/rest/v1/products?id=eq.${id}` : provider === 'localdb' ? `/localdb/products/${id}` : `https://dummyjson.com/products/${id}`;
+        window.LearningModule.showFetchExplanation(provider === 'supabase' ? 'PATCH' : 'PUT', url, payload);
       }
     } catch (err) {
-      showToast('PUT Request Failed', err.message, 'error');
+      showToast('Update Failed', err.message, 'error');
     } finally {
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Send PUT Request';
+      submitBtn.textContent = 'Send Update Request';
     }
   }
 
@@ -487,9 +696,8 @@ const UIModule = (function () {
     btn.textContent = 'Deleting...';
 
     try {
-      await ApiService.deleteProduct(deleteTargetId);
+      await window.DataService.deleteProduct(deleteTargetId);
 
-      // Animate card removal in UI
       const cardEl = document.querySelector(`.product-card[data-id="${deleteTargetId}"]`);
       if (cardEl) {
         cardEl.classList.add('deleting-anim');
@@ -504,13 +712,15 @@ const UIModule = (function () {
       }
 
       closeModal('delete-confirm-modal');
-      showToast('DELETE Request Succeeded (200 OK)', `Product #${deleteTargetId} deleted.`, 'success');
+      showToast('DELETE Succeeded', `Product #${deleteTargetId} deleted from database.`, 'success');
 
       if (window.LearningModule && window.LearningModule.isLearningModeActive()) {
-        window.LearningModule.showFetchExplanation('DELETE', `https://dummyjson.com/products/${deleteTargetId}`);
+        const provider = window.DataService.getProvider();
+        const url = provider === 'supabase' ? `/rest/v1/products?id=eq.${deleteTargetId}` : provider === 'localdb' ? `/localdb/products/${deleteTargetId}` : `https://dummyjson.com/products/${deleteTargetId}`;
+        window.LearningModule.showFetchExplanation('DELETE', url);
       }
     } catch (err) {
-      showToast('DELETE Request Failed', err.message, 'error');
+      showToast('DELETE Failed', err.message, 'error');
     } finally {
       btn.disabled = false;
       btn.textContent = 'Yes, Send DELETE Request';
@@ -555,13 +765,19 @@ const UIModule = (function () {
      Search & Pagination Helpers
      -------------------------------------------------------------------------- */
   function clearSearch() {
-    const input = document.getElementById('global-search');
-    const clearBtn = document.getElementById('clear-search');
+    const headerInput = document.getElementById('global-search');
+    const catalogInput = document.getElementById('catalog-search-input');
+    const headerClearBtn = document.getElementById('clear-search');
+    const catalogClearBtn = document.getElementById('clear-catalog-search');
     const statusBar = document.getElementById('search-status-bar');
 
-    if (input) input.value = '';
-    clearBtn?.classList.add('hide');
+    if (headerInput) headerInput.value = '';
+    if (catalogInput) catalogInput.value = '';
+
+    headerClearBtn?.classList.add('hide');
+    catalogClearBtn?.classList.add('hide');
     statusBar?.classList.add('hide');
+
     activeSearchQuery = '';
     resetAndFetch();
   }
@@ -577,6 +793,88 @@ const UIModule = (function () {
   }
 
   /* --------------------------------------------------------------------------
+     Supabase Config Modal Handlers
+     -------------------------------------------------------------------------- */
+  function openSupabaseConfigModal() {
+    const supaService = window.SupabaseService;
+    if (supaService) {
+      const cfg = supaService.getConfig();
+      document.getElementById('supa-url').value = cfg.url;
+      document.getElementById('supa-key').value = cfg.key;
+    }
+    openModal('supabase-config-modal');
+  }
+
+  async function handleSupabaseTestConnection() {
+    const url = document.getElementById('supa-url').value.trim();
+    const key = document.getElementById('supa-key').value.trim();
+    const statusMsg = document.getElementById('supa-status-message');
+
+    if (!url || !key) {
+      showToast('Configuration Missing', 'Please provide both Supabase URL and API Key.', 'error');
+      return;
+    }
+
+    statusMsg.textContent = 'Testing HTTP connection to Supabase PostgREST endpoint...';
+
+    try {
+      await window.SupabaseService.testConnection(url, key);
+      statusMsg.innerHTML = '<strong style="color:var(--method-post);">✓ Success!</strong> Connection established with Supabase database.';
+      showToast('Connection Successful', 'Successfully authenticated with Supabase!', 'success');
+    } catch (err) {
+      statusMsg.innerHTML = `<strong style="color:var(--method-delete);">❌ Error:</strong> ${escapeHtml(err.message)}`;
+      showToast('Connection Failed', err.message, 'error');
+    }
+  }
+
+  function handleSupabaseConfigSave(e) {
+    e.preventDefault();
+    const url = document.getElementById('supa-url').value.trim();
+    const key = document.getElementById('supa-key').value.trim();
+
+    if (!url || !key) {
+      showToast('Configuration Missing', 'Please enter valid URL and API Key.', 'error');
+      return;
+    }
+
+    window.SupabaseService.saveConfig(url, key);
+    closeModal('supabase-config-modal');
+    switchProvider('supabase');
+    showToast('Credentials Saved', 'Supabase credentials saved. Reloading data...', 'success');
+  }
+
+  function copySqlScript() {
+    const code = document.getElementById('sql-code-snippet')?.textContent;
+    if (!code) return;
+
+    navigator.clipboard.writeText(code).then(() => {
+      const btn = document.getElementById('copy-sql-btn');
+      if (btn) {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '✓ Copied SQL!';
+        setTimeout(() => { btn.innerHTML = orig; }, 2000);
+      }
+      showToast('Copied!', 'Supabase PostgreSQL SQL script copied to clipboard.', 'success');
+    });
+  }
+
+  /* --------------------------------------------------------------------------
+     Theme Switcher
+     -------------------------------------------------------------------------- */
+  function initTheme() {
+    const savedTheme = localStorage.getItem('api_lab_theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+
+    document.getElementById('theme-toggle')?.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('api_lab_theme', next);
+      showToast('Theme Changed', `Switched to ${next} mode.`, 'info');
+    });
+  }
+
+  /* --------------------------------------------------------------------------
      Modal Utilities
      -------------------------------------------------------------------------- */
   function openModal(id) {
@@ -587,7 +885,6 @@ const UIModule = (function () {
     document.getElementById(id)?.classList.add('hide');
   }
 
-  // General Utilities
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -611,7 +908,8 @@ const UIModule = (function () {
     openModal,
     closeModal,
     clearSearch,
-    resetAndFetch
+    resetAndFetch,
+    renderAuthState
   };
 })();
 
