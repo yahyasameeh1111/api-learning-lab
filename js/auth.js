@@ -1,7 +1,7 @@
 /**
  * Auth Module - Connected to Live Supabase Auth Endpoint
  * Endpoint: https://bnfexkfyrhpgvgehblhi.supabase.co/auth/v1
- * Fixes "error while sending confirmation" by auto-bypassing email confirmation.
+ * Stores all registered users directly in Supabase Authentication (auth.users).
  */
 
 const AuthService = (function () {
@@ -57,7 +57,7 @@ const AuthService = (function () {
 
     const endpointUrl = `${supaCfg.url}/auth/v1/token?grant_type=password`;
 
-    // Local fallback check for authorized accounts
+    // Pre-authorized fallback credentials check
     const preAuths = [
       { u: 'yahya', p: '1234' },
       { u: 'abc', p: 'abc@111' }
@@ -126,7 +126,7 @@ const AuthService = (function () {
           });
         }
 
-        throw new Error('Invalid username or password. Please try again.');
+        throw new Error(data.error_description || data.msg || data.message || 'Invalid username or password.');
       }
 
       const userObj = {
@@ -172,8 +172,8 @@ const AuthService = (function () {
   }
 
   /**
-   * Register a new User Account directly with live Supabase Auth API.
-   * Auto-bypasses Supabase email confirmation errors ("error while sending confirmation").
+   * Register a new User Account directly in Supabase Auth (auth.users)
+   * POST /auth/v1/signup
    */
   async function signUp(username, password) {
     const cleanUsername = (username || '').trim();
@@ -184,8 +184,8 @@ const AuthService = (function () {
     if (!cleanUsername || cleanUsername.length < 3) {
       throw new Error('Username must be at least 3 characters long.');
     }
-    if (!cleanPassword || cleanPassword.length < 4) {
-      throw new Error('Password must be at least 4 characters long.');
+    if (!cleanPassword || cleanPassword.length < 6) {
+      throw new Error('Password must be at least 6 characters long.');
     }
 
     const supaCfg = window.SupabaseService ? window.SupabaseService.getConfig() : {
@@ -195,80 +195,64 @@ const AuthService = (function () {
 
     const endpointUrl = `${supaCfg.url}/auth/v1/signup`;
 
-    try {
-      const response = await fetch(endpointUrl, {
-        method: 'POST',
-        headers: {
-          'apikey': supaCfg.key,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          email: email,
-          password: cleanPassword,
-          data: { username: cleanUsername }
-        })
-      });
-
-      const latency = Math.round(performance.now() - startTime);
-      const data = await response.json();
-
-      // Check if Supabase returned confirmation email or rate limit error
-      const isEmailConfirmError = !response.ok && (
-        (data.msg && (data.msg.includes('confirmation') || data.msg.includes('rate limit') || data.msg.includes('email'))) ||
-        (data.message && (data.message.includes('confirmation') || data.message.includes('rate limit') || data.message.includes('email'))) ||
-        (data.error_code && (data.error_code.includes('email') || data.error_code.includes('rate_limit')))
-      );
-
-      if (isEmailConfirmError || response.ok) {
-        if (window.ExplorerModule) {
-          window.ExplorerModule.addLog({
-            id: 'supa_signup_ok_' + Date.now(),
-            timestamp: new Date().toLocaleTimeString(),
-            method: 'POST',
-            url: endpointUrl,
-            endpoint: `[Supabase Auth] User Registered (200 OK)`,
-            statusCode: 200,
-            latency: latency,
-            requestHeaders: { 'apikey': 'sb_publishable_***', 'Content-Type': 'application/json' },
-            requestBody: { email: email, password: '***' },
-            responseHeaders: { 'content-type': 'application/json' },
-            responseBody: response.ok ? data : { message: 'User account created in Supabase Auth.' }
-          });
+    const response = await fetch(endpointUrl, {
+      method: 'POST',
+      headers: {
+        'apikey': supaCfg.key,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: email,
+        password: cleanPassword,
+        data: {
+          username: cleanUsername,
+          full_name: cleanUsername
         }
+      })
+    });
 
-        // Grant active logged-in session immediately
-        const registeredUser = {
-          username: cleanUsername,
-          id: (data.user && data.user.id) ? data.user.id : `usr_${Date.now().toString(36)}`,
-          token: data.access_token || `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${cleanUsername}-session`,
-          email: email,
-          provider: 'Supabase Auth'
-        };
+    const latency = Math.round(performance.now() - startTime);
+    const data = await response.json();
 
-        saveSession(registeredUser);
-        return registeredUser;
-      }
-
-      if (!response.ok) {
-        throw new Error(data.msg || data.message || 'Registration failed.');
-      }
-
-      return await signIn(cleanUsername, cleanPassword);
-    } catch (err) {
-      // If error relates to email confirmation or SMTP limit, seamlessly register & log in
-      if (err.message && (err.message.includes('confirmation') || err.message.includes('rate limit') || err.message.includes('email'))) {
-        const registeredUser = {
-          username: cleanUsername,
-          id: `usr_${Date.now().toString(36)}`,
-          token: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${cleanUsername}-session`,
-          email: email,
-          provider: 'Supabase Auth'
-        };
-        saveSession(registeredUser);
-        return registeredUser;
-      }
-      throw err;
+    if (window.ExplorerModule) {
+      window.ExplorerModule.addLog({
+        id: 'supa_signup_' + Date.now(),
+        timestamp: new Date().toLocaleTimeString(),
+        method: 'POST',
+        url: endpointUrl,
+        endpoint: response.ok ? '[Supabase Auth] User Account Created' : '[Supabase Auth] Registration Attempt',
+        statusCode: response.status || 200,
+        latency: latency,
+        requestHeaders: { 'apikey': 'sb_publishable_***', 'Content-Type': 'application/json' },
+        requestBody: { email: email, password: '***', data: { username: cleanUsername } },
+        responseHeaders: { 'content-type': 'application/json' },
+        responseBody: data
+      });
     }
+
+    if (!response.ok) {
+      // Check if error is due to Supabase email confirmation setting
+      if (data.msg && data.msg.includes('sending confirmation')) {
+        throw new Error('Please turn off "Confirm email" in your Supabase Dashboard (Authentication -> Providers -> Email) so users are saved in Supabase.');
+      }
+      // If user already exists in Supabase, sign them in directly
+      if (data.msg && (data.msg.includes('already registered') || data.msg.includes('User already exists'))) {
+        return await signIn(cleanUsername, cleanPassword);
+      }
+      throw new Error(data.msg || data.message || 'Registration failed with Supabase Auth.');
+    }
+
+    // Successfully registered user in Supabase Authentication
+    const userObj = {
+      username: cleanUsername,
+      id: data.id || data.user?.id || `usr_${Date.now()}`,
+      token: data.access_token || `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${cleanUsername}-supa`,
+      email: data.email || email,
+      provider: 'Supabase Auth'
+    };
+
+    saveSession(userObj);
+    return userObj;
   }
 
   function updateUserWidget() {
